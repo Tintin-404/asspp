@@ -18,7 +18,7 @@ struct SearchView: View {
     @State private var searching = false
     let regionKeys = Array(ApplePackage.Configuration.storeFrontValues.keys.sorted())
 
-    @State private var searchInput: String = ""
+    @State private var searchError: String?
     #if DEBUG
         @AppStorage("searchResults") // reduce API calls
         var searchResult: [AppStore.AppPackage] = []
@@ -126,6 +126,12 @@ struct SearchView: View {
 
     var content: some View {
         Form {
+            if let searchError {
+                Section {
+                    Text(searchError)
+                        .foregroundStyle(.red)
+                }
+            }
             if searching || !searchResult.isEmpty {
                 Section(searching ? "Searching..." : "\(searchResult.count) Results") {
                     ForEach(searchResult) { item in
@@ -139,6 +145,7 @@ struct SearchView: View {
             }
         }
         .formStyle(.grouped)
+        .animation(.spring, value: searchError)
         .navigationDestination(for: ProductDestination.self) { dest in
             ProductView(archive: dest.archive, region: dest.region, navigationPath: $navigationPath)
         }
@@ -162,7 +169,7 @@ struct SearchView: View {
     func search() {
         searchKeyFocused = false
         searching = true
-        searchInput = "\(searchRegion) - \(searchKey)" + " ..."
+        searchError = nil
         logger.info("search: term=\(searchKey) region=\(searchRegion) type=\(searchType.rawValue)")
         Task {
             do {
@@ -182,14 +189,14 @@ struct SearchView: View {
                 await MainActor.run {
                     searching = false
                     searchResult = result.map { AppStore.AppPackage(software: $0) }
-                    searchInput = "\(searchRegion) - \(searchKey)"
+                    searchError = nil
                 }
             } catch {
                 logger.error("search failed: term=\(searchKey) error=\(error.localizedDescription)")
                 await MainActor.run {
                     searching = false
                     searchResult = []
-                    searchInput = "\(searchRegion) - \(searchKey) - Error: \(error.localizedDescription)"
+                    searchError = error.localizedDescription
                 }
             }
         }
@@ -298,6 +305,8 @@ extension ApplePackage.EntityType {
             "iphone"
         case .iPad:
             "ipad"
+        case .appleTV:
+            "appletv"
         }
     }
 }
